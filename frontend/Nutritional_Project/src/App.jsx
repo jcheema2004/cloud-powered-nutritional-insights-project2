@@ -1,9 +1,22 @@
 import { useMemo, useState } from 'react'
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  PointElement,
+  Title,
+  Tooltip,
+} from 'chart.js'
+import { Bar, Bubble, Pie, Scatter } from 'react-chartjs-2'
 import './App.css'
 import ApiActionControls from './components/ApiActionControls'
 import DataPreviewPanel from './components/DataPreviewPanel'
 import FilterControls from './components/FilterControls'
 import PaginationControls from './components/PaginationControls'
+import allDietsRows from '../example/all_diets.json'
 import {
   clusterModel,
   filterPaginationModel,
@@ -50,6 +63,52 @@ const placeholderClusterApiRows = [
   },
 ]
 
+const chartCards = [
+  {
+    id: 'bar',
+    title: 'Bar Chart',
+    description: 'Average macronutrient content by diet type.',
+  },
+  {
+    id: 'scatter',
+    title: 'Scatter Plot',
+    description: 'Nutrient relationships (e.g., protein vs carbs).',
+  },
+  {
+    id: 'heatmap',
+    title: 'Heatmap',
+    description: 'Nutrient correlations.',
+  },
+  {
+    id: 'pie',
+    title: 'Pie Chart',
+    description: 'Recipe distribution by diet type.',
+  },
+]
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Title,
+)
+
+const nutrientKeys = ['Protein(g)', 'Carbs(g)', 'Fat(g)']
+const nutrientColors = {
+  'Protein(g)': '#2563eb',
+  'Carbs(g)': '#10b981',
+  'Fat(g)': '#f59e0b',
+}
+
+const toNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function App() {
   const [insights, setInsights] = useState(() =>
     placeholderInsightApiRows.map((row) => ({ ...nutritionInsightModel, ...toNutritionInsight(row) })),
@@ -63,6 +122,9 @@ function App() {
   const [filters, setFilters] = useState(() => ({ ...filterPaginationModel }))
   const [apiStatus, setApiStatus] = useState('Backend API placeholder mode.')
   const [activeDataset, setActiveDataset] = useState('insights')
+  const [activeChartId, setActiveChartId] = useState(null)
+  const activeChart = chartCards.find((chart) => chart.id === activeChartId) ?? null
+  const inactiveCharts = chartCards.filter((chart) => chart.id !== activeChartId)
 
   const dietOptions = useMemo(() => {
     const optionSet = new Set(insights.map((item) => item.dietType).filter(Boolean))
@@ -97,6 +159,132 @@ function App() {
     const endIndex = startIndex + paginationMeta.pageSize
     return filteredInsights.slice(startIndex, endIndex)
   }, [filteredInsights, paginationMeta.currentPage, paginationMeta.pageSize])
+
+  const chartMetrics = useMemo(() => {
+    const groupedByDiet = new Map()
+
+    allDietsRows.forEach((row) => {
+      const dietType = String(row.Diet_type ?? '').trim().toLowerCase()
+      if (!dietType) {
+        return
+      }
+
+      const current = groupedByDiet.get(dietType) ?? {
+        dietType,
+        count: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+      }
+
+      current.count += 1
+      current.protein += toNumber(row['Protein(g)'])
+      current.carbs += toNumber(row['Carbs(g)'])
+      current.fat += toNumber(row['Fat(g)'])
+      groupedByDiet.set(dietType, current)
+    })
+
+    const diets = [...groupedByDiet.values()]
+      .map((item) => ({
+        ...item,
+        avgProtein: item.count ? item.protein / item.count : 0,
+        avgCarbs: item.count ? item.carbs / item.count : 0,
+        avgFat: item.count ? item.fat / item.count : 0,
+      }))
+      .sort((a, b) => a.dietType.localeCompare(b.dietType))
+
+    const maxAvgMacro = diets.reduce(
+      (max, item) => Math.max(max, item.avgProtein, item.avgCarbs, item.avgFat),
+      0,
+    )
+
+    return {
+      diets,
+      maxAvgMacro,
+      totalRows: allDietsRows.length,
+    }
+  }, [])
+
+  const barChartData = useMemo(
+    () => ({
+      labels: chartMetrics.diets.map((item) => item.dietType),
+      datasets: nutrientKeys.map((nutrient) => {
+        const valueKey =
+          nutrient === 'Protein(g)' ? 'avgProtein' : nutrient === 'Carbs(g)' ? 'avgCarbs' : 'avgFat'
+        return {
+          label: nutrient,
+          data: chartMetrics.diets.map((item) => item[valueKey]),
+          backgroundColor: nutrientColors[nutrient],
+          borderRadius: 6,
+        }
+      }),
+    }),
+    [chartMetrics.diets],
+  )
+
+  const scatterChartData = useMemo(
+    () => ({
+      datasets: [
+        {
+          label: 'Diet average (Protein vs Carbs)',
+          data: chartMetrics.diets.map((item) => ({
+            x: Number(item.avgProtein.toFixed(2)),
+            y: Number(item.avgCarbs.toFixed(2)),
+          })),
+          pointRadius: 7,
+          pointHoverRadius: 9,
+          pointBackgroundColor: '#2563eb',
+          pointBorderColor: '#1e3a8a',
+          pointBorderWidth: 1,
+        },
+      ],
+    }),
+    [chartMetrics.diets],
+  )
+
+  const heatmapChartData = useMemo(
+    () => ({
+      datasets: nutrientKeys.map((nutrient, nutrientIndex) => {
+        const valueKey =
+          nutrient === 'Protein(g)' ? 'avgProtein' : nutrient === 'Carbs(g)' ? 'avgCarbs' : 'avgFat'
+        return {
+          label: nutrient,
+          data: chartMetrics.diets.map((item, dietIndex) => ({
+            x: nutrientIndex + 1,
+            y: dietIndex + 1,
+            r: Math.max(4, Math.round((item[valueKey] / Math.max(chartMetrics.maxAvgMacro, 1)) * 14)),
+          })),
+          backgroundColor: nutrientColors[nutrient],
+          borderColor: '#ffffff',
+          borderWidth: 1,
+        }
+      }),
+    }),
+    [chartMetrics.diets, chartMetrics.maxAvgMacro],
+  )
+
+  const pieChartData = useMemo(
+    () => ({
+      labels: chartMetrics.diets.map((item) => item.dietType),
+      datasets: [
+        {
+          label: 'Recipe distribution by diet type',
+          data: chartMetrics.diets.map((item) => item.count),
+          backgroundColor: [
+            '#2563eb',
+            '#16a34a',
+            '#f59e0b',
+            '#8b5cf6',
+            '#ef4444',
+            '#06b6d4',
+            '#84cc16',
+            '#f97316',
+          ],
+        },
+      ],
+    }),
+    [chartMetrics.diets],
+  )
 
   const handleSearchChange = (event) => {
     const value = event.target.value
@@ -142,6 +330,99 @@ function App() {
     setApiStatus(`Clusters placeholder loaded (${placeholderClusterApiRows.length} records).`)
   }
 
+  const handleChartSelect = (chartId) => {
+    setActiveChartId((previous) => (previous === chartId ? null : chartId))
+  }
+
+  const renderChartVisual = (chartId, isCompact) => {
+    const sharedOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 350,
+      },
+      plugins: {
+        legend: {
+          display: !isCompact,
+          position: 'bottom',
+        },
+      },
+    }
+
+    if (chartId === 'bar') {
+      return (
+        <Bar
+          data={barChartData}
+          options={{
+            ...sharedOptions,
+            scales: {
+              x: { ticks: { autoSkip: true, maxRotation: 35, minRotation: 25 } },
+              y: { beginAtZero: true, title: { display: true, text: 'Average grams' } },
+            },
+          }}
+        />
+      )
+    }
+
+    if (chartId === 'scatter') {
+      return (
+        <Scatter
+          data={scatterChartData}
+          options={{
+            ...sharedOptions,
+            scales: {
+              x: { title: { display: true, text: 'Average Protein (g)' }, beginAtZero: true },
+              y: { title: { display: true, text: 'Average Carbs (g)' }, beginAtZero: true },
+            },
+          }}
+        />
+      )
+    }
+
+    if (chartId === 'heatmap') {
+      return (
+        <Bubble
+          data={heatmapChartData}
+          options={{
+            ...sharedOptions,
+            scales: {
+              x: {
+                min: 0.5,
+                max: nutrientKeys.length + 0.5,
+                ticks: {
+                  stepSize: 1,
+                  callback: (value) => nutrientKeys[value - 1] ?? '',
+                },
+              },
+              y: {
+                min: 0.5,
+                max: chartMetrics.diets.length + 0.5,
+                ticks: {
+                  stepSize: 1,
+                  callback: (value) => chartMetrics.diets[value - 1]?.dietType ?? '',
+                },
+              },
+            },
+            plugins: {
+              ...sharedOptions.plugins,
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const nutrient = nutrientKeys[context.raw.x - 1]
+                    const diet = chartMetrics.diets[context.raw.y - 1]?.dietType
+                    return `${diet}: ${nutrient}`
+                  },
+                },
+              },
+            },
+          }}
+        />
+      )
+    }
+
+    return <Pie data={pieChartData} options={sharedOptions} />
+  }
+
   return (
     <div className="app-page">
       <header className="app-header">
@@ -151,24 +432,79 @@ function App() {
       <main className="app-content">
         <section className="section-block">
           <h2>Explore Nutritional Insights</h2>
-          <div className="charts-grid">
-            <article className="chart-card">
-              <h3>Bar Chart</h3>
-              <p>Average macronutrient content by diet type.</p>
-            </article>
-            <article className="chart-card">
-              <h3>Scatter Plot</h3>
-              <p>Nutrient relationships (e.g., protein vs carbs).</p>
-            </article>
-            <article className="chart-card">
-              <h3>Heatmap</h3>
-              <p>Nutrient correlations.</p>
-            </article>
-            <article className="chart-card">
-              <h3>Pie Chart</h3>
-              <p>Recipe distribution by diet type.</p>
-            </article>
+          <div className={`charts-layout${activeChart ? ' has-active' : ''}`}>
+            {activeChart ? (
+              <>
+                <article
+                  className="chart-card chart-card-expanded is-active"
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={true}
+                  onClick={() => handleChartSelect(activeChart.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      handleChartSelect(activeChart.id)
+                    }
+                  }}
+                >
+                  <span className="chart-selected-tag">Selected chart</span>
+                  <h3>{activeChart.title}</h3>
+                  <p>{activeChart.description}</p>
+                  <div className="chart-canvas-wrap">{renderChartVisual(activeChart.id, false)}</div>
+                </article>
+
+                <div className="charts-bottom-row">
+                  {inactiveCharts.map((chart) => (
+                    <article
+                      key={chart.id}
+                      className="chart-card chart-card-mini"
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={false}
+                      onClick={() => handleChartSelect(chart.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          handleChartSelect(chart.id)
+                        }
+                      }}
+                    >
+                      <h3>{chart.title}</h3>
+                      <div className="chart-canvas-wrap compact">{renderChartVisual(chart.id, true)}</div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="charts-grid">
+                {chartCards.map((chart) => (
+                  <article
+                    key={chart.id}
+                    className="chart-card"
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={false}
+                    onClick={() => handleChartSelect(chart.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        handleChartSelect(chart.id)
+                      }
+                    }}
+                  >
+                    <h3>{chart.title}</h3>
+                    <p>{chart.description}</p>
+                    <div className="chart-canvas-wrap">{renderChartVisual(chart.id, false)}</div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
+          <p className="chart-footnote">
+            Charts are rendered from `all_diets.json` ({chartMetrics.totalRows} records) as a backend API
+            placeholder.
+          </p>
         </section>
 
         <section className="section-block">

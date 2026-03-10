@@ -39,13 +39,73 @@
   gap: 24px;
 }
 
+.charts-layout {
+  display: grid;
+  gap: 18px;
+}
+
 .chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   height: 330px;
   border-radius: 10px;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
   padding: 18px 16px;
+  cursor: pointer;
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    opacity 0.25s ease;
+}
+
+.chart-card:hover {
+  transform: translateY(-2px);
+}
+
+.chart-card:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.chart-card.is-active {
+  border-color: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.18);
+  transform: scale(1.02);
+}
+
+.charts-layout.has-active .chart-card {
+  height: auto;
+}
+
+.chart-card-expanded {
+  min-height: 520px;
+  padding: 22px 20px;
+  animation: expandedCardEnter 0.28s ease;
+}
+
+.charts-bottom-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.chart-card-mini {
+  min-height: 140px;
+  padding: 12px 12px;
+  animation: miniCardEnter 0.25s ease;
+}
+
+.chart-card-mini h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.chart-card-mini p {
+  font-size: 14px;
 }
 
 .chart-card h3 {
@@ -59,6 +119,60 @@
   font-size: 16px;
   color: #6b7280;
   line-height: 1.35;
+}
+
+.chart-canvas-wrap {
+  flex: 1;
+  min-height: 190px;
+}
+
+.chart-canvas-wrap.compact {
+  min-height: 95px;
+}
+
+.chart-card-expanded .chart-canvas-wrap {
+  min-height: 360px;
+}
+
+.chart-selected-tag {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #1e40af;
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
+}
+
+.chart-footnote {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+@keyframes expandedCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(1);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+  }
+}
+
+@keyframes miniCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .control-row {
@@ -216,6 +330,10 @@
   .charts-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
+
+  .charts-bottom-row {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
 }
 
 @media (max-width: 840px) {
@@ -225,6 +343,10 @@
   }
 
   .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .charts-bottom-row {
     grid-template-columns: 1fr;
   }
 
