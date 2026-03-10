@@ -19,13 +19,31 @@ def get_diet_insights(req: func.HttpRequest) -> func.HttpResponse:
         stream = blob_client.download_blob().readall()
         df = pd.read_csv(io.BytesIO(stream))
 
-        # 3. Convert the whole table to JSON
-        # .to_dict(orient='records') is so each row is a JSON object
-        result = df.to_dict(orient='records')
+        # 3. Pagination Logic
+        page = int(req.params.get('page', 1))
+        page_size = int(req.params.get('page_size', 10))
+        
+        # Calculate start and end rows
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        # Slice the dataframe
+        paginated_df = df.iloc[start:end]
+        result = paginated_df.to_dict(orient='records')
+
+        # 3. Add Metadata
+        response_body = {
+            "Data": result,
+            "Message": None,
+            "Success": True,
+            "Total": len(df),
+            "Page": page,
+            "PageSize": page_size
+        }
 
         # 4. Return the full data to the UI
         return func.HttpResponse(
-            body=json.dumps(result),
+            body=json.dumps(response_body),
             mimetype="application/json",
             status_code=200
         )
