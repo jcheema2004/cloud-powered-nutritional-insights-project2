@@ -104,6 +104,8 @@ const nutrientColors = {
   'Fat(g)': '#f59e0b',
 }
 
+const API_BASE_URL = "https://group8projec2nutriinsightapi.azurewebsites.net/api"
+
 const toNumber = (value) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
@@ -310,12 +312,37 @@ function App() {
     }))
   }
 
-  const handleGetInsights = () => {
-    setInsights(
-      placeholderInsightApiRows.map((row) => ({ ...nutritionInsightModel, ...toNutritionInsight(row) })),
-    )
-    setActiveDataset('insights')
-    setApiStatus('Insights loaded from placeholder data. Backend API will replace this.')
+  const handleGetInsights = async () => {
+
+    try {
+      setApiStatus('Loading insights from backend...')
+
+      const response = await fetch(
+        `${API_BASE_URL}/nutritional_data?page=1&page_size=50`
+      )
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`)
+      }
+
+      const payload = await response.json()
+
+      if (!payload.Success) {
+        throw new Error(payload.Message || 'API returned an unsuccessful response')
+      } 
+
+      const mappedInsights = payload.Data.map((row) => ({
+        ...nutritionInsightModel,
+        ...toNutritionInsight(row),
+      }))
+
+      setInsights(mappedInsights)
+      setActiveDataset('insights')
+      setApiStatus(`Insights loaded from backend (${payload.Data.length} records).`)
+    } catch (error) {
+      console.error(error)
+      setApiStatus(`Failed to load backend insights: ${error.message}`)
+    }
   }
 
   const handleGetRecipes = () => {
