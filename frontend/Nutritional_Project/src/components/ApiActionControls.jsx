@@ -21,7 +21,7 @@ function ApiActionControls({
       </div>
       <p className="api-status">{apiStatus}</p>
       <p className="api-status">
-        Recipe records: {recipeCount} | Cluster records: {clusterCount}
+        Recipe placeholders: {recipeCount} | Cluster placeholders: {clusterCount}
       </p>
     </>
   )
