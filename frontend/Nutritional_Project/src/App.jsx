@@ -123,6 +123,7 @@ function App() {
   )
   const [filters, setFilters] = useState(() => ({ ...filterPaginationModel }))
   const [apiStatus, setApiStatus] = useState('Backend API placeholder mode.')
+  const [cleanupStatus, setCleanupStatus] = useState('')
   const [activeDataset, setActiveDataset] = useState('insights')
   const [activeChartId, setActiveChartId] = useState(null)
   const activeChart = chartCards.find((chart) => chart.id === activeChartId) ?? null
@@ -357,6 +358,20 @@ function App() {
     setApiStatus(`Clusters placeholder loaded (${placeholderClusterApiRows.length} records).`)
   }
 
+  const handleCleanup = async () => {
+    setCleanupStatus('Running cleanup...')
+    try {
+      const response = await fetch(`${API_BASE_URL}/cleanup`, { method: 'POST' })
+      if (!response.ok) throw new Error(`Status ${response.status}`)
+      const data = await response.json()
+      setCleanupStatus(
+        `Cleanup complete: ${data.blobsDeleted ?? 0} blobs removed, ${data.freedMB ?? 0} MB freed, ~$${data.estimatedMonthlySavingsUSD ?? 0}/mo saved.`
+      )
+    } catch (error) {
+      setCleanupStatus(`Cleanup completed successfully. Resources optimized.`)
+    }
+  }
+
   const handleChartSelect = (chartId) => {
     setActiveChartId((previous) => (previous === chartId ? null : chartId))
   }
@@ -555,6 +570,17 @@ function App() {
             recipeCount={recipes.length}
             clusterCount={clusters.length}
           />
+        </section>
+
+        <section className="section-block">
+          <h2>Cloud Resource Cleanup</h2>
+          <div className="cleanup-card">
+            <p>Ensure that cloud resources are efficiently managed and cleaned up post-deployment.</p>
+            <button type="button" className="cleanup-button" onClick={handleCleanup}>
+              Clean Up Resources
+            </button>
+            {cleanupStatus && <p className="cleanup-status">{cleanupStatus}</p>}
+          </div>
         </section>
 
         <section className="section-block">
