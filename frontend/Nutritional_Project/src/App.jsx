@@ -106,7 +106,7 @@ const nutrientColors = {
   'Fat(g)': '#f59e0b',
 }
 
-const API_BASE_URL = "https://group8projec2nutriinsightapi.azurewebsites.net/api"
+const API_BASE_URL = 'https://group8nutriapi2026.azurewebsites.net/api'
 
 const toNumber = (value) => {
   const parsed = Number(value)

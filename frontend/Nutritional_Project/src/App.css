@@ -389,6 +389,47 @@
   background-color: #ffffff;
 }
 
+.oauth-card__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.oauth-card__hint {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.oauth-card__hint code {
+  font-size: 13px;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.oauth-card__hint--small {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.oauth-card__error {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #b91c1c;
+}
+
+.oauth-card__signed-in {
+  margin-bottom: 18px;
+}
+
+.oauth-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cleanup-card {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;

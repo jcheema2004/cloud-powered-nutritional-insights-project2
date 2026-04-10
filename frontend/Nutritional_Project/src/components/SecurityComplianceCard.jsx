@@ -10,8 +10,7 @@
 import { useEffect, useState } from 'react'
 
 // ── This should match the same base URL you use in App.jsx ──
-const API_BASE_URL =
-  'https://group8projec2nutriinsightapi.azurewebsites.net/api'
+const API_BASE_URL = 'https://group8nutriapi2026.azurewebsites.net/api'
 
 function SecurityComplianceCard() {
   // ── State variables ──────────────────────────────────────
