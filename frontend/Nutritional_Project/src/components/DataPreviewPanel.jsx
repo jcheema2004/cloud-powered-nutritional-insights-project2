@@ -73,7 +73,7 @@ function DataPreviewPanel({ activeDataset, insightsPage, recipes, clusters, pagi
 
   return (
     <div className="data-preview">
-      <h3>Nutritional Insight Placeholder Data</h3>
+      <h3>Nutritional insight data</h3>
       <p className="preview-meta">
         Showing page {paginationMeta.currentPage} of {paginationMeta.totalPages} ({paginationMeta.totalItems}{' '}
         records)

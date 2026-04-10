@@ -139,9 +139,11 @@ function App() {
   const filteredInsights = useMemo(() => {
     const searchValue = filters.searchDietType.trim().toLowerCase()
     return insights.filter((item) => {
-      const matchesSearch = item.dietType.toLowerCase().includes(searchValue)
+      const diet = String(item.dietType ?? '').toLowerCase()
+      const matchesSearch = !searchValue || diet.includes(searchValue)
+      const selected = filters.selectedDietType.toLowerCase()
       const matchesSelect =
-        filters.selectedDietType === 'all' || item.dietType === filters.selectedDietType
+        filters.selectedDietType === 'all' || selected === 'all' || diet === selected
       return matchesSearch && matchesSelect
     })
   }, [filters.searchDietType, filters.selectedDietType, insights])
@@ -341,6 +343,12 @@ function App() {
 
       setInsights(mappedInsights)
       setActiveDataset('insights')
+      setFilters((previous) => ({
+        ...previous,
+        selectedDietType: 'all',
+        searchDietType: '',
+        currentPage: 1,
+      }))
       setApiStatus(`Insights loaded from backend (${payload.Data.length} records).`)
     } catch (error) {
       console.error(error)
