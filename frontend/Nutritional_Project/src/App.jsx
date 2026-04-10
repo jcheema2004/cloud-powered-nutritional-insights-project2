@@ -117,6 +117,7 @@ function App() {
   const [insights, setInsights] = useState(() =>
     placeholderInsightApiRows.map((row) => ({ ...nutritionInsightModel, ...toNutritionInsight(row) })),
   )
+  const [dietRows, setDietRows] = useState(() => allDietsRows)
   const [recipes, setRecipes] = useState(() =>
     placeholderRecipeApiRows.map((row) => ({ ...recipeModel, ...toRecipe(row) })),
   )
@@ -148,8 +149,30 @@ function App() {
     })
   }, [filters.searchDietType, filters.selectedDietType, insights])
 
+  const filteredDietRows = useMemo(() => {
+    const searchValue = filters.searchDietType.trim().toLowerCase()
+    const selected = filters.selectedDietType.toLowerCase()
+
+    return dietRows.filter((row) => {
+      const diet = String(row.Diet_type ?? row.dietType ?? '').trim().toLowerCase()
+      const matchesSearch = !searchValue || diet.includes(searchValue)
+      const matchesSelect = filters.selectedDietType === 'all' || selected === 'all' || diet === selected
+      return matchesSearch && matchesSelect
+    })
+  }, [dietRows, filters.searchDietType, filters.selectedDietType])
+
+  const currentDatasetTotalItems = useMemo(() => {
+    if (activeDataset === 'recipes') {
+      return recipes.length
+    }
+    if (activeDataset === 'clusters') {
+      return clusters.length
+    }
+    return filteredInsights.length
+  }, [activeDataset, recipes.length, clusters.length, filteredInsights.length])
+
   const paginationMeta = useMemo(() => {
-    const totalItems = filteredInsights.length
+    const totalItems = currentDatasetTotalItems
     const totalPages = Math.max(1, Math.ceil(totalItems / filters.pageSize))
     const safeCurrentPage = Math.min(filters.currentPage, totalPages)
     return {
@@ -159,13 +182,19 @@ function App() {
       currentPage: safeCurrentPage,
       pageSize: filters.pageSize,
     }
-  }, [filteredInsights.length, filters.currentPage, filters.pageSize])
+  }, [currentDatasetTotalItems, filters.currentPage, filters.pageSize])
 
   const pagedInsights = useMemo(() => {
     const startIndex = (paginationMeta.currentPage - 1) * paginationMeta.pageSize
     const endIndex = startIndex + paginationMeta.pageSize
     return filteredInsights.slice(startIndex, endIndex)
   }, [filteredInsights, paginationMeta.currentPage, paginationMeta.pageSize])
+
+  const pagedRecipes = useMemo(() => {
+    const startIndex = (paginationMeta.currentPage - 1) * paginationMeta.pageSize
+    const endIndex = startIndex + paginationMeta.pageSize
+    return recipes.slice(startIndex, endIndex)
+  }, [recipes, paginationMeta.currentPage, paginationMeta.pageSize])
 
   const chartMetrics = useMemo(() => {
     const groupedByDiet = new Map()
@@ -306,14 +335,14 @@ function App() {
   const goToPreviousPage = () => {
     setFilters((previous) => ({
       ...previous,
-      currentPage: Math.max(1, previous.currentPage - 1),
+      currentPage: Math.max(1, paginationMeta.currentPage - 1),
     }))
   }
 
   const goToNextPage = () => {
     setFilters((previous) => ({
       ...previous,
-      currentPage: Math.min(paginationMeta.totalPages, previous.currentPage + 1),
+      currentPage: Math.min(paginationMeta.totalPages, paginationMeta.currentPage + 1),
     }))
   }
 
@@ -322,25 +351,49 @@ function App() {
     try {
       setApiStatus('Loading insights from backend...')
 
-      const response = await fetch(
-        `${API_BASE_URL}/nutritional_data?page=1&page_size=50`
-      )
+      const pageSize = 500
+      let page = 1
+      let total = null
+      const allRows = []
 
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`)
+      while (total === null || allRows.length < total) {
+        const response = await fetch(
+          `${API_BASE_URL}/nutritional_data?page=${page}&page_size=${pageSize}`
+        )
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`)
+        }
+
+        const payload = await response.json()
+
+        if (!payload.Success) {
+          throw new Error(payload.Message || 'API returned an unsuccessful response')
+        }
+
+        const rows = Array.isArray(payload.Data) ? payload.Data : []
+        allRows.push(...rows)
+
+        if (typeof payload.Total === 'number') {
+          total = payload.Total
+        } else if (total === null) {
+          // Fallback: stop if backend doesn't provide totals.
+          total = allRows.length
+        }
+
+        if (rows.length === 0) break
+        page += 1
+        setApiStatus(
+          `Loading insights from backend... (${Math.min(allRows.length, total)} of ${total} records)`
+        )
       }
 
-      const payload = await response.json()
-
-      if (!payload.Success) {
-        throw new Error(payload.Message || 'API returned an unsuccessful response')
-      } 
-
-      const mappedInsights = payload.Data.map((row) => ({
+      const mappedInsights = allRows.map((row) => ({
         ...nutritionInsightModel,
         ...toNutritionInsight(row),
       }))
 
+      setDietRows(allRows)
       setInsights(mappedInsights)
       setActiveDataset('insights')
       setFilters((previous) => ({
@@ -349,7 +402,7 @@ function App() {
         searchDietType: '',
         currentPage: 1,
       }))
-      setApiStatus(`Insights loaded from backend (${payload.Data.length} records).`)
+      setApiStatus(`Insights loaded from backend (${mappedInsights.length} records).`)
     } catch (error) {
       console.error(error)
       setApiStatus(`Failed to load backend insights: ${error.message}`)
@@ -357,15 +410,52 @@ function App() {
   }
 
   const handleGetRecipes = () => {
-    setRecipes(placeholderRecipeApiRows.map((row) => ({ ...recipeModel, ...toRecipe(row) })))
+    const nextRecipes = filteredDietRows.map((row) => ({ ...recipeModel, ...toRecipe(row) }))
+    setRecipes(nextRecipes)
     setActiveDataset('recipes')
-    setApiStatus(`Recipes placeholder loaded (${placeholderRecipeApiRows.length} records).`)
+    setFilters((previous) => ({ ...previous, currentPage: 1 }))
+    setApiStatus(`Recipes loaded from current backend results (${nextRecipes.length} records).`)
   }
 
   const handleGetClusters = () => {
-    setClusters(placeholderClusterApiRows.map((row) => ({ ...clusterModel, ...toCluster(row) })))
+    const groupedByDiet = new Map()
+
+    filteredDietRows.forEach((row) => {
+      const dietType = String(row.Diet_type ?? row.dietType ?? '').trim()
+      if (!dietType) return
+
+      const key = dietType.toLowerCase()
+      const current = groupedByDiet.get(key) ?? {
+        dietType,
+        count: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+      }
+
+      current.count += 1
+      current.protein += toNumber(row['Protein(g)'])
+      current.carbs += toNumber(row['Carbs(g)'])
+      current.fat += toNumber(row['Fat(g)'])
+      groupedByDiet.set(key, current)
+    })
+
+    const nextClusters = [...groupedByDiet.values()]
+      .sort((a, b) => a.dietType.localeCompare(b.dietType))
+      .map((item, index) => ({
+        ...clusterModel,
+        clusterId: index + 1,
+        dietType: item.dietType,
+        recipeCount: item.count,
+        avgProteinG: item.count ? item.protein / item.count : 0,
+        avgCarbsG: item.count ? item.carbs / item.count : 0,
+        avgFatG: item.count ? item.fat / item.count : 0,
+      }))
+
+    setClusters(nextClusters)
     setActiveDataset('clusters')
-    setApiStatus(`Clusters placeholder loaded (${placeholderClusterApiRows.length} records).`)
+    setFilters((previous) => ({ ...previous, currentPage: 1 }))
+    setApiStatus(`Clusters derived from current backend results (${nextClusters.length} records).`)
   }
 
   const handleCleanup = async () => {
@@ -608,19 +698,21 @@ function App() {
           <DataPreviewPanel
             activeDataset={activeDataset}
             insightsPage={pagedInsights}
-            recipes={recipes}
+            recipes={pagedRecipes}
             clusters={clusters}
             paginationMeta={paginationMeta}
           />
-          <PaginationControls
-            currentPage={paginationMeta.currentPage}
-            totalPages={paginationMeta.totalPages}
-            onPrevious={goToPreviousPage}
-            onNext={goToNextPage}
-            onPageSelect={(page) =>
-              setFilters((previous) => ({ ...previous, currentPage: page }))
-            }
-          />
+          {(activeDataset === 'insights' || activeDataset === 'recipes') && (
+            <PaginationControls
+              currentPage={paginationMeta.currentPage}
+              totalPages={paginationMeta.totalPages}
+              onPrevious={goToPreviousPage}
+              onNext={goToNextPage}
+              onPageSelect={(page) =>
+                setFilters((previous) => ({ ...previous, currentPage: page }))
+              }
+            />
+          )}
           
         </section>
       </main>
